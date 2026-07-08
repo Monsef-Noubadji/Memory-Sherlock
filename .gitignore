@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.local
+.vite/
+e2e/artifacts/
+test-app/node_modules/
+test-app/dist/

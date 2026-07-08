@@ -1,0 +1,35 @@
+{
+  "name": "memory-sherlock",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-powered browser memory leak inspector — Chrome DevTools extension",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "tsx e2e/run.ts"
+  },
+  "dependencies": {
+    "@tanstack/react-virtual": "^3.10.8",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "uplot": "^1.6.31",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0",
+    "@types/chrome": "^0.0.287",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^25.0.1",
+    "puppeteer-core": "^23.10.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^2.1.8"
+  }
+}
