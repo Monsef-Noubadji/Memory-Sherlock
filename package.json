@@ -13,6 +13,7 @@
     "e2e": "tsx e2e/run.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
     "@tanstack/react-virtual": "^3.10.8",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
