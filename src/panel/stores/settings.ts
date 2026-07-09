@@ -1,12 +1,22 @@
 import { createStore } from 'zustand/vanilla';
+import { DEFAULT_CLAUDE_MODEL, DEFAULT_NVIDIA_MODEL } from '@/core/ai/provider';
+import type { ProviderConfig, ProviderKind } from '@/core/ai/provider';
 
 export interface SettingsSlice {
-  apiKey: string;
+  provider: ProviderKind;
+  claudeKey: string;
+  claudeModel: string;
+  nvidiaKey: string;
+  nvidiaModel: string;
   samplingIntervalMs: number;
   disabledDetectors: string[];
-  setApiKey: (key: string) => void;
+  setProvider: (p: ProviderKind) => void;
+  setKey: (p: 'claude' | 'nvidia', key: string) => void;
+  setModel: (p: 'claude' | 'nvidia', model: string) => void;
   setSamplingInterval: (ms: number) => void;
   toggleDetector: (id: string) => void;
+  /** The full config the AI layer consumes. */
+  providerConfig: () => ProviderConfig;
 }
 
 interface StorageLike {
@@ -40,15 +50,49 @@ const localStorageBackend: StorageLike = {
   },
 };
 
+const PERSIST_KEYS = [
+  'provider',
+  'claudeKey',
+  'claudeModel',
+  'nvidiaKey',
+  'nvidiaModel',
+  'apiKey', // legacy: pre-multi-provider Claude key
+  'samplingIntervalMs',
+  'disabledDetectors',
+];
+
 export function createSettingsStore(backend?: StorageLike) {
   const storage = backend ?? chromeStorage() ?? localStorageBackend;
   const store = createStore<SettingsSlice>()((set, get) => ({
-    apiKey: '',
+    provider: 'heuristic',
+    claudeKey: '',
+    claudeModel: DEFAULT_CLAUDE_MODEL,
+    nvidiaKey: '',
+    nvidiaModel: DEFAULT_NVIDIA_MODEL,
     samplingIntervalMs: 2000,
     disabledDetectors: [],
-    setApiKey: (apiKey) => {
-      set({ apiKey });
-      void storage.set({ apiKey });
+
+    setProvider: (provider) => {
+      set({ provider });
+      void storage.set({ provider });
+    },
+    setKey: (p, key) => {
+      if (p === 'claude') {
+        set({ claudeKey: key });
+        void storage.set({ claudeKey: key });
+      } else {
+        set({ nvidiaKey: key });
+        void storage.set({ nvidiaKey: key });
+      }
+    },
+    setModel: (p, model) => {
+      if (p === 'claude') {
+        set({ claudeModel: model });
+        void storage.set({ claudeModel: model });
+      } else {
+        set({ nvidiaModel: model });
+        void storage.set({ nvidiaModel: model });
+      }
     },
     setSamplingInterval: (samplingIntervalMs) => {
       set({ samplingIntervalMs });
@@ -60,14 +104,41 @@ export function createSettingsStore(backend?: StorageLike) {
       set({ disabledDetectors });
       void storage.set({ disabledDetectors });
     },
+
+    providerConfig: () => {
+      const s = get();
+      return {
+        active: s.provider,
+        claudeKey: s.claudeKey,
+        claudeModel: s.claudeModel,
+        nvidiaKey: s.nvidiaKey,
+        nvidiaModel: s.nvidiaModel,
+      };
+    },
   }));
-  void storage.get(['apiKey', 'samplingIntervalMs', 'disabledDetectors']).then((saved) => {
+
+  void storage.get(PERSIST_KEYS).then((saved) => {
+    const str = (v: unknown): v is string => typeof v === 'string';
+    const legacyKey = str(saved.apiKey) ? saved.apiKey : '';
+    const claudeKey = str(saved.claudeKey) ? saved.claudeKey : legacyKey;
+    // If a legacy Claude key existed and no explicit provider was chosen, activate Claude.
+    const provider =
+      saved.provider === 'claude' || saved.provider === 'nvidia' || saved.provider === 'heuristic'
+        ? saved.provider
+        : claudeKey
+          ? 'claude'
+          : 'heuristic';
     store.setState({
-      ...(typeof saved.apiKey === 'string' ? { apiKey: saved.apiKey } : {}),
+      provider,
+      claudeKey,
+      ...(str(saved.claudeModel) ? { claudeModel: saved.claudeModel } : {}),
+      ...(str(saved.nvidiaKey) ? { nvidiaKey: saved.nvidiaKey } : {}),
+      ...(str(saved.nvidiaModel) ? { nvidiaModel: saved.nvidiaModel } : {}),
       ...(typeof saved.samplingIntervalMs === 'number' ? { samplingIntervalMs: saved.samplingIntervalMs } : {}),
       ...(Array.isArray(saved.disabledDetectors) ? { disabledDetectors: saved.disabledDetectors as string[] } : {}),
     });
   });
+
   return store;
 }
 

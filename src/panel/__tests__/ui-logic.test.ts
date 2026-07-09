@@ -87,25 +87,51 @@ describe('buildMarkdownReport', () => {
   });
 });
 
+function fakeBackend(data: Record<string, unknown>) {
+  return {
+    get: vi.fn(async (keys: string[]) =>
+      Object.fromEntries(keys.filter((k) => k in data).map((k) => [k, data[k]])),
+    ),
+    set: vi.fn(async (items: Record<string, unknown>) => {
+      Object.assign(data, items);
+    }),
+  };
+}
+
 describe('settings store', () => {
-  it('persists through the backend and hydrates saved values', async () => {
-    const data: Record<string, unknown> = { apiKey: 'sk-saved' };
-    const backend = {
-      get: vi.fn(async (keys: string[]) =>
-        Object.fromEntries(keys.filter((k) => k in data).map((k) => [k, data[k]])),
-      ),
-      set: vi.fn(async (items: Record<string, unknown>) => {
-        Object.assign(data, items);
-      }),
-    };
+  it('persists provider config and builds the AI config', async () => {
+    const backend = fakeBackend({});
     const store = createSettingsStore(backend);
-    await new Promise((r) => setTimeout(r, 0)); // let hydration settle
-    expect(store.getState().apiKey).toBe('sk-saved');
+    await new Promise((r) => setTimeout(r, 0));
+
+    store.getState().setProvider('nvidia');
+    store.getState().setKey('nvidia', 'nvapi-abc');
+    store.getState().setModel('nvidia', 'deepseek-ai/deepseek-r1');
+    expect(backend.set).toHaveBeenCalledWith({ provider: 'nvidia' });
+    expect(backend.set).toHaveBeenCalledWith({ nvidiaKey: 'nvapi-abc' });
+
+    const cfg = store.getState().providerConfig();
+    expect(cfg).toMatchObject({ active: 'nvidia', nvidiaKey: 'nvapi-abc', nvidiaModel: 'deepseek-ai/deepseek-r1' });
+
     store.getState().setSamplingInterval(5000);
     expect(backend.set).toHaveBeenCalledWith({ samplingIntervalMs: 5000 });
     store.getState().toggleDetector('timer');
     expect(store.getState().disabledDetectors).toEqual(['timer']);
     store.getState().toggleDetector('timer');
     expect(store.getState().disabledDetectors).toEqual([]);
+  });
+
+  it('migrates a legacy apiKey into claudeKey and activates Claude', async () => {
+    const store = createSettingsStore(fakeBackend({ apiKey: 'sk-legacy' }));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(store.getState().claudeKey).toBe('sk-legacy');
+    expect(store.getState().provider).toBe('claude');
+    expect(store.getState().providerConfig().active).toBe('claude');
+  });
+
+  it('defaults to the heuristic provider with no saved config', async () => {
+    const store = createSettingsStore(fakeBackend({}));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(store.getState().provider).toBe('heuristic');
   });
 });

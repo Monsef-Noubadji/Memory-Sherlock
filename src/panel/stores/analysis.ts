@@ -76,7 +76,7 @@ export function createAnalysisStore(deps: AnalysisDeps) {
       if (get().explanations[candidate.id] || get().explaining[candidate.id]) return;
       set({ explaining: { ...get().explaining, [candidate.id]: true } });
       try {
-        const provider = createProvider(deps.settings.getState().apiKey);
+        const provider = createProvider(deps.settings.getState().providerConfig());
         const explanation = await provider.explain(candidate);
         set({ explanations: { ...get().explanations, [candidate.id]: explanation } });
       } finally {
@@ -86,7 +86,7 @@ export function createAnalysisStore(deps: AnalysisDeps) {
 
     async generateFix(candidate) {
       if (get().fixes[candidate.id]) return;
-      const provider = createProvider(deps.settings.getState().apiKey);
+      const provider = createProvider(deps.settings.getState().providerConfig());
       const fix = await provider.suggestFix(candidate);
       set({ fixes: { ...get().fixes, [candidate.id]: fix } });
     },
