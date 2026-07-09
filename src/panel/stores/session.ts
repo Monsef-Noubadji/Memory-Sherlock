@@ -28,6 +28,7 @@ export interface SessionSlice {
   pendingChunks: string[];
   loadingSnapshot: boolean;
   onMessage: (msg: BackgroundToPanel) => void | Promise<void>;
+  importSnapshot: (fileName: string, text: string) => Promise<void>;
   attach: () => void;
   detach: () => void;
   takeSnapshot: () => void;
@@ -94,6 +95,28 @@ export function createSessionStore(deps: SessionDeps) {
           set({ errors: [...get().errors, msg.message] });
           return;
       }
+    },
+
+    importSnapshot(fileName, text) {
+      set({ loadingSnapshot: true });
+      return deps
+        .loadSnapshot([text])
+        .then((res) => {
+          const meta: SnapshotMeta = {
+            id: res.snapshotId,
+            label: fileName.trim() || 'Imported snapshot',
+            time: now(),
+            nodeCount: res.nodeCount,
+            totalSize: res.totalSize,
+          };
+          set({ snapshots: [...get().snapshots, meta], loadingSnapshot: false });
+        })
+        .catch((err: unknown) => {
+          set({
+            loadingSnapshot: false,
+            errors: [...get().errors, `import failed: ${err instanceof Error ? err.message : String(err)}`],
+          });
+        });
     },
 
     attach: () => deps.post({ type: 'attach' }),

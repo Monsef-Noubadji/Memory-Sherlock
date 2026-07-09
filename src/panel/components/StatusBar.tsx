@@ -17,12 +17,8 @@ export function StatusBar() {
   const caps = useSessionState((s) => s.capabilities);
   const errors = useSessionState((s) => s.errors);
   const dismissError = useSessionState((s) => s.dismissError);
-  const loadingSnapshot = useSessionState((s) => s.loadingSnapshot);
   const running = useAnalysisState((s) => s.running);
   const setPaletteOpen = useUiState((s) => s.setPaletteOpen);
-
-  const attached = sessionState === 'attached' || sessionState === 'capturing';
-  const session = rt.session.getState();
 
   return (
     <div
@@ -37,7 +33,7 @@ export function StatusBar() {
         borderBottom: '1px solid var(--border)',
       }}
     >
-      <span style={{ fontWeight: 700, fontSize: 'var(--fs-md)', letterSpacing: '-0.01em' }}>
+      <span style={{ fontWeight: 700, fontSize: 'var(--fs-md)' }}>
         Memory <span style={{ color: 'var(--primary)' }}>Sherlock</span>
       </span>
       <Badge tone={STATE_TONE[sessionState]}>
@@ -71,31 +67,13 @@ export function StatusBar() {
             background: 'var(--danger-dim)',
           }}
         >
-          {errors[0]} ✕
+          {errors[0]} x
         </button>
       )}
 
       <Badge tone={caps.agent ? 'success' : 'neutral'}>agent {caps.agent ? 'on' : 'off'}</Badge>
       <Badge tone={caps.debugger ? 'success' : 'neutral'}>debugger {caps.debugger ? 'on' : 'off'}</Badge>
 
-      {!attached ? (
-        <Button kind="primary" onClick={() => session.attach()}>
-          <Icon name="play" size={12} /> Attach
-        </Button>
-      ) : (
-        <>
-          <Button onClick={() => session.takeSnapshot()} disabled={loadingSnapshot || sessionState === 'capturing'}>
-            <Icon name="camera" size={12} />
-            {sessionState === 'capturing' ? 'Capturing…' : loadingSnapshot ? 'Parsing…' : 'Snapshot'}
-          </Button>
-          <Button onClick={() => session.collectGarbage()} title="Force garbage collection">
-            <Icon name="trash" size={12} /> GC
-          </Button>
-          <Button kind="ghost" onClick={() => session.detach()} title="Detach debugger">
-            Detach
-          </Button>
-        </>
-      )}
       <Button
         kind="primary"
         onClick={() => void rt.analysis.getState().runAnalysis()}
@@ -103,10 +81,10 @@ export function StatusBar() {
         title="Run all leak detectors"
       >
         <Icon name="search" size={12} />
-        {running ? 'Analyzing…' : 'Analyze'}
+        {running ? 'Analyzing...' : 'Analyze'}
       </Button>
       <Button kind="ghost" onClick={() => setPaletteOpen(true)} title="Command palette (Ctrl+K)">
-        ⌘K
+        Ctrl+K
       </Button>
     </div>
   );

@@ -30,8 +30,7 @@ export function DetachedDom() {
     return (
       <EmptyState
         title="No snapshot to inspect"
-        hint="Detached DOM analysis reads the heap snapshot. Attach and capture one first."
-        action={<Button kind="primary" onClick={() => rt.session.getState().takeSnapshot()}>Take snapshot</Button>}
+        hint="Detached DOM analysis reads the heap snapshot. Import a .heapsnapshot on the Snapshots screen first."
       />
     );
   }

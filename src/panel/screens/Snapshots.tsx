@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Button, EmptyState, SectionLabel } from '../components/primitives';
 import { RetainerChain } from '../components/RetainerChain';
@@ -11,7 +11,8 @@ type Sort = 'retained' | 'shallow' | 'count';
 export function Snapshots() {
   const rt = useRuntime();
   const snapshots = useSessionState((s) => s.snapshots);
-  const sessionState = useSessionState((s) => s.sessionState);
+  const loadingSnapshot = useSessionState((s) => s.loadingSnapshot);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [diffMode, setDiffMode] = useState(false);
   const [query, setQuery] = useState('');
@@ -23,6 +24,33 @@ export function Snapshots() {
 
   const current = selectedId ?? snapshots[snapshots.length - 1]?.id ?? null;
   const prev = snapshots.length >= 2 ? snapshots[snapshots.length - 2].id : null;
+
+  const chooseSnapshotFile = () => importInputRef.current?.click();
+
+  const handleImportFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!file) return;
+    try {
+      const text = await file.text();
+      await rt.session.getState().importSnapshot(file.name, text);
+    } catch (err) {
+      await rt.session.getState().onMessage({
+        type: 'error',
+        message: `import failed: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  };
+
+  const fileInput = (
+    <input
+      ref={importInputRef}
+      type="file"
+      accept=".heapsnapshot,.json,application/json"
+      onChange={(event) => void handleImportFile(event)}
+      style={{ display: 'none' }}
+    />
+  );
 
   useEffect(() => {
     const client = rt.heap();
@@ -54,30 +82,24 @@ export function Snapshots() {
 
   if (snapshots.length === 0) {
     return (
-      <EmptyState
-        title="No heap snapshots yet"
-        hint={
-          sessionState === 'attached'
-            ? 'Capture a snapshot to explore constructors, retained sizes, and retainer paths.'
-            : 'Attach the debugger first, then capture a snapshot.'
-        }
-        action={
-          sessionState === 'attached' ? (
-            <Button kind="primary" onClick={() => rt.session.getState().takeSnapshot()}>
-              Take snapshot
+      <>
+        {fileInput}
+        <EmptyState
+          title="No heap snapshots yet"
+          hint="Export a .heapsnapshot from Chrome DevTools Memory, then import it here to inspect constructors, retained sizes, and retainer paths."
+          action={
+            <Button kind="primary" onClick={chooseSnapshotFile} disabled={loadingSnapshot}>
+              {loadingSnapshot ? 'Importing...' : 'Import snapshot'}
             </Button>
-          ) : (
-            <Button kind="primary" onClick={() => rt.session.getState().attach()}>
-              Attach
-            </Button>
-          )
-        }
-      />
+          }
+        />
+      </>
     );
   }
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+      {fileInput}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, padding: 'var(--s-3)' }}>
         <div style={{ display: 'flex', gap: 'var(--s-2)', alignItems: 'center', marginBottom: 'var(--s-2)', flexWrap: 'wrap' }}>
           <select
@@ -105,7 +127,9 @@ export function Snapshots() {
             </>
           )}
           <span style={{ flex: 1 }} />
-          <Button onClick={() => rt.session.getState().takeSnapshot()}>New snapshot</Button>
+          <Button onClick={chooseSnapshotFile} disabled={loadingSnapshot}>
+            {loadingSnapshot ? 'Importing...' : 'Import'}
+          </Button>
         </div>
 
         {diffMode ? <DiffTable rows={diffRows} /> : <AggregateTable rows={rows} onSelect={openDrill} />}

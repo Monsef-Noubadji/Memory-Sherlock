@@ -47,6 +47,33 @@ describe('session store', () => {
     expect(store.getState().pendingChunks).toEqual([]);
   });
 
+  it('imports a heap snapshot file as a single parser chunk', async () => {
+    const { store, loadSnapshot } = makeStore();
+    await store.getState().importSnapshot('baseline.heapsnapshot', '{"snapshot":true}');
+    expect(loadSnapshot).toHaveBeenCalledWith(['{"snapshot":true}']);
+    expect(store.getState().snapshots[0]).toMatchObject({
+      id: 1,
+      label: 'baseline.heapsnapshot',
+      nodeCount: 42,
+      totalSize: 17,
+      time: 1000,
+    });
+    expect(store.getState().loadingSnapshot).toBe(false);
+    expect(store.getState().pendingChunks).toEqual([]);
+  });
+
+  it('reports import failures without clearing streamed snapshot chunks', async () => {
+    const { store, loadSnapshot } = makeStore();
+    loadSnapshot.mockRejectedValueOnce(new Error('invalid snapshot json'));
+    store.getState().onMessage({ type: 'snapshot-chunk', chunk: '{"partial":' });
+    await store.getState().importSnapshot('', 'not json');
+    expect(loadSnapshot).toHaveBeenCalledWith(['not json']);
+    expect(store.getState().snapshots).toEqual([]);
+    expect(store.getState().errors).toEqual(['import failed: invalid snapshot json']);
+    expect(store.getState().loadingSnapshot).toBe(false);
+    expect(store.getState().pendingChunks).toEqual(['{"partial":']);
+  });
+
   it('sends attach/take-snapshot commands through the port', () => {
     const { store, posted } = makeStore();
     store.getState().attach();
