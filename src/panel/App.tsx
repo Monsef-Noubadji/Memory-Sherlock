@@ -1,3 +1,14 @@
+import { useMemo } from 'react';
+import './styles/tokens.css';
+import './styles/base.css';
+import { AppShell } from './AppShell';
+import { createRuntime, RuntimeProvider } from './runtime';
+
 export function App() {
-  return <div>Memory Sherlock</div>;
+  const runtime = useMemo(() => createRuntime(), []);
+  return (
+    <RuntimeProvider runtime={runtime}>
+      <AppShell />
+    </RuntimeProvider>
+  );
 }

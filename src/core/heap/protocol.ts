@@ -1,6 +1,7 @@
 import { aggregateByConstructor, keyForNode, type ConstructorAggregate } from './aggregate';
 import { computeRetainedSizes } from './dominators';
 import { diffSnapshots, type SnapshotDiffRow } from './diff';
+export type { SnapshotDiffRow } from './diff';
 import { findDetachedDom } from './detached';
 import { parseSnapshotChunks, type HeapGraph } from './parse';
 import { shortestRetainerPath } from './paths';
