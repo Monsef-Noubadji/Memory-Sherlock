@@ -49,19 +49,11 @@ export function CommandPalette() {
         run: () => navigate(n.route),
       })),
       {
-        id: 'snapshot',
-        label: 'Take heap snapshot',
-        icon: 'camera',
-        run: () => rt.session.getState().takeSnapshot(),
-      },
-      {
         id: 'analyze',
         label: 'Run leak detectors',
         icon: 'search',
         run: () => void rt.analysis.getState().runAnalysis(),
       },
-      { id: 'gc', label: 'Collect garbage', icon: 'trash', run: () => rt.session.getState().collectGarbage() },
-      { id: 'attach', label: 'Attach debugger', icon: 'play', run: () => rt.session.getState().attach() },
     ],
     [navigate, rt],
   );
