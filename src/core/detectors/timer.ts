@@ -16,17 +16,16 @@ export const timerDetector: Detector = {
   async analyze(ctx): Promise<LeakCandidate[]> {
     const agent = ctx.agent!;
     const now = Date.now();
-    const oldIntervals = agent
-      .liveTimers()
-      .filter((t) => t.timerKind === 'interval' && now - t.setAt > OLD_MS);
-    if (oldIntervals.length === 0) return [];
+    const liveIntervals = agent.liveTimers().filter((t) => t.timerKind === 'interval');
+    if (liveIntervals.length === 0) return [];
 
     const candidates: LeakCandidate[] = [];
     const inRepeat = new Set<number>();
-    const liveIds = new Set(oldIntervals.map((t) => t.id));
+    // Repeated registrations from one call site are a leak at any age.
+    const allLiveIds = new Set(liveIntervals.map((t) => t.id));
 
     for (const sig of agent.repeatSignatures('timer', 3)) {
-      const ids = sig.ids.filter((id) => liveIds.has(id));
+      const ids = sig.ids.filter((id) => allLiveIds.has(id));
       if (ids.length < 3) continue;
       for (const id of ids) inRepeat.add(id);
       const severity: Severity = ids.length >= 10 ? 4 : 3;
@@ -49,8 +48,9 @@ export const timerDetector: Detector = {
       });
     }
 
-    for (const t of oldIntervals) {
+    for (const t of liveIntervals) {
       if (inRepeat.has(t.id)) continue;
+      if (now - t.setAt <= OLD_MS) continue; // lone interval: only flag if long-lived
       candidates.push({
         id: `timer:lone:${t.id}`,
         classification: 'timer',

@@ -16,12 +16,12 @@ export const observerDetector: Detector = {
   async analyze(ctx): Promise<LeakCandidate[]> {
     const agent = ctx.agent!;
     const now = Date.now();
-    const old = agent.liveObservers().filter((o) => now - o.createdAt > OLD_MS);
-    if (old.length === 0) return [];
+    const live = agent.liveObservers();
+    if (live.length === 0) return [];
 
     // group by creation stack
-    const groups = new Map<string, typeof old>();
-    for (const o of old) {
+    const groups = new Map<string, typeof live>();
+    for (const o of live) {
       const key = `${o.observerType}|${o.stack.join('\n')}`;
       const g = groups.get(key) ?? [];
       g.push(o);
@@ -32,6 +32,9 @@ export const observerDetector: Detector = {
     for (const group of groups.values()) {
       const sample = group[0];
       const repeated = group.length >= 3;
+      // A single observer is only flagged once it's been alive a while;
+      // repeated same-stack observers are a leak at any age.
+      if (!repeated && now - sample.createdAt <= OLD_MS) continue;
       const severity: Severity = group.length >= 10 ? 4 : group.length >= 3 ? 3 : 1;
       candidates.push({
         id: `observer:${sample.observerType}:${sample.stack[0] ?? sample.id}`,

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Memory Sherlock Test App — deliberately leaky</title>
+    <style>
+      body { font-family: system-ui, sans-serif; background: #0b0f17; color: #f3f4f6; padding: 24px; }
+      button { display: block; margin: 8px 0; padding: 8px 16px; background: #1a2233; color: #f3f4f6;
+               border: 1px solid #273449; border-radius: 6px; cursor: pointer; }
+      button:hover { border-color: #4f8cff; }
+      .note { color: #94a3b8; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <h1>Deliberately leaky test app</h1>
+    <p class="note">Every button plants one labeled memory leak. Used by the e2e detector-correctness harness.</p>
+
+    <button id="leak-listener">1. Listener on removed element (missing cleanup)</button>
+    <button id="leak-listener-repeat">2. Repeated window listeners (per-mount, no cleanup)</button>
+    <button id="leak-detached">3. Detached dialog kept by module ref</button>
+    <button id="leak-cache">4. Growing cache (unbounded)</button>
+    <button id="leak-timer">5. Uncleared intervals</button>
+    <button id="leak-observer">6. Undisconnected ResizeObservers</button>
+    <button id="leak-closure">7. Closure retaining a large array</button>
+
+    <div id="stage"></div>
+
+    <script>
+      // Registry the e2e harness reads to know what must be detected.
+      window.__PLANTED_LEAKS__ = [];
+      const plant = (id, classification) => window.__PLANTED_LEAKS__.push({ id, classification });
+
+      const stage = document.getElementById('stage');
+
+      // ---- 1. listener whose target leaves the DOM ----------------------
+      function mountLeakyModal() {
+        const modal = document.createElement('div');
+        modal.className = 'leaky-modal';
+        modal.textContent = 'modal';
+        stage.appendChild(modal);
+        modal.addEventListener('click', function onModalClick() {
+          console.log('clicked', modal.className);
+        });
+        // removed without removeEventListener — the leak
+        setTimeout(function unmountModal() { modal.remove(); }, 50);
+        plant('leak-listener', 'event-listener');
+      }
+      document.getElementById('leak-listener').addEventListener('click', mountLeakyModal);
+
+      // ---- 2. same call site registers window listeners repeatedly ------
+      function mountChartWidget() {
+        window.addEventListener('resize', function onChartResize() {
+          console.log('resize for a widget that may be long gone');
+        });
+        plant('leak-listener-repeat', 'event-listener');
+      }
+      document.getElementById('leak-listener-repeat').addEventListener('click', mountChartWidget);
+
+      // ---- 3. detached subtree kept alive by a module-level ref ---------
+      let savedDialog = null; // the retaining reference
+      function showAndLoseDialog() {
+        const dialog = document.createElement('div');
+        dialog.id = 'big-dialog';
+        for (let i = 0; i < 50; i++) {
+          const row = document.createElement('span');
+          row.textContent = 'row ' + i + ' ' + 'x'.repeat(200);
+          dialog.appendChild(row);
+        }
+        stage.appendChild(dialog);
+        savedDialog = dialog;      // kept
+        dialog.remove();           // detached — but savedDialog still points at it
+        plant('leak-detached', 'detached-dom');
+      }
+      document.getElementById('leak-detached').addEventListener('click', showAndLoseDialog);
+
+      // ---- 4. unbounded cache growth -------------------------------------
+      class CacheEntry {
+        constructor(i) {
+          this.key = 'entry-' + i;
+          this.data = new Array(128).fill(i);        // Array growth
+          this.blob = ('padding-' + i).repeat(40);   // string growth
+        }
+      }
+      const responseCache = new Map();
+      let cacheSeq = 0;
+      function fillCache() {
+        for (let i = 0; i < 400; i++) {
+          const id = cacheSeq++;
+          responseCache.set(id, new CacheEntry(id));
+        }
+        plant('leak-cache', 'collection-growth');
+      }
+      document.getElementById('leak-cache').addEventListener('click', fillCache);
+
+      // ---- 5. intervals never cleared ------------------------------------
+      function startPollingWidget() {
+        setInterval(function pollServer() {
+          console.log('poll', Date.now());
+        }, 60000);
+        plant('leak-timer', 'timer');
+      }
+      document.getElementById('leak-timer').addEventListener('click', startPollingWidget);
+
+      // ---- 6. observers never disconnected --------------------------------
+      function watchPanelSize() {
+        const panel = document.createElement('div');
+        stage.appendChild(panel);
+        const ro = new ResizeObserver(function onPanelResize() {});
+        ro.observe(panel);
+        plant('leak-observer', 'observer');
+      }
+      document.getElementById('leak-observer').addEventListener('click', watchPanelSize);
+
+      // ---- 7. closure capturing a large array ------------------------------
+      const closureHolders = [];
+      function captureBigData() {
+        const bigDataset = new Array(200000).fill(0).map((_, i) => i * 1.5);
+        closureHolders.push(function leakyInner() {
+          return bigDataset.length; // captures the whole array forever
+        });
+        plant('leak-closure', 'closure');
+      }
+      document.getElementById('leak-closure').addEventListener('click', captureBigData);
+    </script>
+  </body>
+</html>

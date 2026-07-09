@@ -27,35 +27,54 @@ export function findDetachedDom(g: HeapGraph): DetachedSubtree[] {
   }
   if (detached.size === 0) return [];
 
-  const reps: number[] = [];
-  for (const i of detached) {
-    const hasDetachedRetainer = g.retainersOf(i).some((r) => detached.has(r.node));
-    if (!hasDetachedRetainer) reps.push(i);
-  }
-
+  // Cluster detached nodes into connected components over undirected
+  // detached↔detached references. Real detached DOM forms cycles (parent↔
+  // child, element↔attribute), so a "node with no detached retainer" test
+  // finds no representatives — components are the robust grouping.
   const claimed = new Set<number>();
   const subtrees: DetachedSubtree[] = [];
-  for (const rep of reps) {
-    if (claimed.has(rep)) continue;
+
+  const neighbors = (u: number, out: number[]) => {
+    const first = g.firstEdge(u);
+    const last = first + g.edgeCountOf(u);
+    for (let e = first; e < last; e++) {
+      const v = g.edgeTarget(e);
+      if (detached.has(v)) out.push(v);
+    }
+    for (const r of g.retainersOf(u)) {
+      if (detached.has(r.node)) out.push(r.node);
+    }
+  };
+
+  for (const start of detached) {
+    if (claimed.has(start)) continue;
     const cluster: number[] = [];
-    const queue = [rep];
-    claimed.add(rep);
+    const queue = [start];
+    claimed.add(start);
+    const buf: number[] = [];
     while (queue.length) {
       const u = queue.pop()!;
       cluster.push(u);
-      const first = g.firstEdge(u);
-      const last = first + g.edgeCountOf(u);
-      for (let e = first; e < last; e++) {
-        const v = g.edgeTarget(e);
-        if (detached.has(v) && !claimed.has(v)) {
+      buf.length = 0;
+      neighbors(u, buf);
+      for (const v of buf) {
+        if (!claimed.has(v)) {
           claimed.add(v);
           queue.push(v);
         }
       }
     }
-    const retainedBytes = g.retained
-      ? g.retained[rep]
-      : cluster.reduce((sum, n) => sum + g.nodeSelfSize(n), 0);
+    // representative = the top-retained node in the component
+    let rep = cluster[0];
+    let repRetained = g.retained ? g.retained[rep] : g.nodeSelfSize(rep);
+    for (const n of cluster) {
+      const r = g.retained ? g.retained[n] : g.nodeSelfSize(n);
+      if (r > repRetained) {
+        rep = n;
+        repRetained = r;
+      }
+    }
+    const retainedBytes = cluster.reduce((sum, n) => sum + g.nodeSelfSize(n), 0);
     subtrees.push({ representative: rep, nodes: cluster, retainedBytes });
   }
   subtrees.sort((a, b) => b.retainedBytes - a.retainedBytes);
